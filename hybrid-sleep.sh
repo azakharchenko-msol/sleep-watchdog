@@ -1,6 +1,7 @@
 #!/bin/bash
 
-ALLOWED_IDLE_TIME=900
+ALLOWED_IDLE_TIME=600000     #10 min
+ALLOWED_IDLE_TIME_AC=3600000 #60 min
 AC_SLEEP_TIME=60
 BAT_SLEEP_TIME=10
 while true; do
@@ -28,20 +29,37 @@ while true; do
     echo "Idle time for $user: $idle_time"
   done
   echo "system idle $MAX_IDLE_TIME"
-  if [ "$ALLOWED_IDLE_TIME" -ge "$MAX_IDLE_TIME" ]; then
+  TARGET_IDLE_TIME=$ALLOWED_IDLE_TIME
+  if on_ac_power; then
+    TARGET_IDLE_TIME=$ALLOWED_IDLE_TIME_AC
+  fi
+  echo "allowed idle $TARGET_IDLE_TIME"
+  if [ "$MAX_IDLE_TIME" -ge "$TARGET_IDLE_TIME" ]; then
     if on_ac_power; then
       echo "On AC power. sleep $AC_SLEEP_TIME min"
+      echo $(($(date +%s) + ($AC_SLEEP_TIME * 60))) >/tmp/wakeup_time
       rtcwake -m mem -l 900 -t $(date +%s -d "+$AC_SLEEP_TIME minutes")
+
     else
       echo "On battery. sleep $BAT_SLEEP_TIME min"
+      echo $(($(date +%s) + ($BAT_SLEEP_TIME * 60))) >/tmp/wakeup_time
       rtcwake -m mem -l 900 -t $(date +%s -d "+$BAT_SLEEP_TIME minutes")
-    fi
-    echo "Waked up"
-    if [ "$?" -eq 0 ] && ! on_ac_power; then
-      echo "Still on battery. hibernate..."
-      systemctl hibernate
+
     fi
 
+    if [ $(date +%s) -gt $(cat /tmp/wakeup_time) ]; then
+      echo "The system was wake up by timer"
+      if ! on_ac_power; then
+        echo "Still on battery. hibernate..."
+        systemctl hibernate
+        sleep 300
+      fi
+    else
+      echo "The system was wake up by user"
+      sleep 120
+    fi
+  else
+    sleep 60
   fi
-  sleep 60
+
 done

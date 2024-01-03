@@ -31,3 +31,5 @@ systemctl enable $serviceName.service
 
 # Start the service
 systemctl start $serviceName.service
+# Restart the service
+systemctl restart $serviceName.service
