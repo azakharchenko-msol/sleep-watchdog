@@ -34,7 +34,23 @@ while true; do
     TARGET_IDLE_TIME=$ALLOWED_IDLE_TIME_AC
   fi
   echo "allowed idle $TARGET_IDLE_TIME"
-  if [ "$MAX_IDLE_TIME" -ge "$TARGET_IDLE_TIME" ]; then
+  LID_STATE=$(grep -q closed /proc/acpi/button/lid/LID0/state && echo "closed" || echo "open")
+  if [ "$LID_STATE" = "closed" ] && ! on_ac_power; then
+    echo "Lid is closed. sleep $BAT_SLEEP_TIME min"
+    echo $(($(date +%s) + ($BAT_SLEEP_TIME * 60))) >/tmp/wakeup_time
+    rtcwake -m mem -l 900 -t $(date +%s -d "+$BAT_SLEEP_TIME minutes")
+    if [ $(date +%s) -gt $(cat /tmp/wakeup_time) ]; then
+      echo "The system was wake up by timer"
+      if [ "$LID_STATE" = "closed" ] && ! on_ac_power; then
+        echo "Still on battery. hibernate..."
+        systemctl hibernate
+        sleep 300
+      fi
+    else
+      echo "The system was wake up by user"
+      sleep 120
+    fi
+  elif [ "$MAX_IDLE_TIME" -ge "$TARGET_IDLE_TIME" ]; then
     if on_ac_power; then
       echo "On AC power. sleep $AC_SLEEP_TIME min"
       echo $(($(date +%s) + ($AC_SLEEP_TIME * 60))) >/tmp/wakeup_time
